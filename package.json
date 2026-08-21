@@ -6,12 +6,10 @@
 	"main": "dist/index.js",
 	"scripts": {
 		"build": "swc src -d dist -D --delete-dir-on-start --strip-leading-paths",
-		"test": "node --test",
-		"update-hermesc": "node scripts/update-hermesc.mjs"
+		"test": "node --test"
 	},
 	"files": [
-		"dist/index.js",
-		"hermesc-versions.json"
+		"dist/**"
 	],
 	"publishConfig": {
 		"access": "public"
@@ -23,10 +21,5 @@
 		"@swc/core": "^1.7.18",
 		"@types/node": "^22.5.0",
 		"rollup": "^4.21.0"
-	},
-	"dependencies": {
-		"hermesc-94": "npm:@unbound-app/hermesc@94.0.0",
-		"hermesc-96": "npm:@unbound-app/hermesc@96.0.0",
-		"hermesc-98": "npm:@unbound-app/hermesc@98.0.0"
 	}
 }
