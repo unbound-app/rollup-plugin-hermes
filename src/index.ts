@@ -1,32 +1,20 @@
 import type { NormalizedOutputOptions, OutputBundle, OutputChunk, Plugin, PluginContext } from 'rollup';
+import type { HermesTarget } from './manifest';
 import { writeFile, rm, readFile, mkdir } from 'fs/promises';
 import { spawn } from 'child_process';
 import { randomBytes } from 'crypto';
-import { join, dirname, resolve } from 'path';
+import { join, resolve } from 'path';
 import { existsSync } from 'fs';
 import { tmpdir } from 'os';
 
-const heldBytecodeVersions: number[] = require('../hermesc-versions.json');
+import { resolveHermesTargets } from './manifest';
 
-interface HermesTarget {
-	/** Bytecode version this binary produces, or null when explicitly overridden via options. */
-	version: number | null;
-	/** Directory containing the per-platform hermesc binaries (linux/darwin/win32), or null if not installed. */
-	dir: string | null;
-}
-
-function resolveTargets(override?: string): HermesTarget[] {
-	if (override) return [{ version: null, dir: override }];
-
-	return heldBytecodeVersions.map((version) => {
-		try {
-			return { version, dir: dirname(require.resolve(`hermesc-${version}/package.json`)) };
-		} catch (e) {
-			// Not installed - skipped, warned about at compile time instead so this stays a pure function.
-			return { version, dir: null };
-		}
-	});
-}
+type HermesOptions = {
+	hermesc?: string;
+	versions?: number;
+	manifestUrl?: string;
+	cacheDir?: string;
+};
 
 async function compile(ctx: PluginContext, dir: string, js: string): Promise<Buffer | null> {
 	const extension = process.platform === 'win32' ? '.exe' : '';
@@ -71,8 +59,8 @@ async function compile(ctx: PluginContext, dir: string, js: string): Promise<Buf
 	return asset;
 }
 
-function hermesc(options?: { hermesc: string; }): Plugin {
-	const targets = resolveTargets(options?.hermesc);
+function hermesc(pluginOptions?: HermesOptions): Plugin {
+	let targets: HermesTarget[] | undefined;
 
 	return {
 		name: 'hermesc',
@@ -87,6 +75,10 @@ function hermesc(options?: { hermesc: string; }): Plugin {
 			const output = bundle[file] as OutputChunk;
 			if (!output) return;
 
+			targets ??= pluginOptions?.hermesc
+				? [{ version: null, dir: pluginOptions.hermesc }]
+				: await resolveHermesTargets(this, pluginOptions ?? {});
+
 			const temp = join(tmpdir(), 'hermesc');
 			if (!existsSync(temp)) await mkdir(temp);
 
@@ -95,7 +87,7 @@ function hermesc(options?: { hermesc: string; }): Plugin {
 
 			for (const target of targets) {
 				if (!target.dir) {
-					this.warn(`hermesc-${target.version} is not installed. Run the update-hermesc script to refresh held bytecode versions. Skipping.`);
+					this.warn(`hermesc for bytecode version ${target.version} could not be resolved from the manifest cache. Skipping.`);
 					continue;
 				}
 
