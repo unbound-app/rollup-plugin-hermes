@@ -14,9 +14,15 @@ type HermesOptions = {
 	versions?: number;
 	manifestUrl?: string;
 	cacheDir?: string;
+	flags?: string[];
 };
 
-async function compile(ctx: PluginContext, dir: string, js: string): Promise<Buffer | null> {
+type Compiled = {
+	bytecode: Buffer;
+	map: string | null;
+};
+
+async function compile(ctx: PluginContext, dir: string, js: string, flags: string[]): Promise<Compiled | null> {
 	const extension = process.platform === 'win32' ? '.exe' : '';
 	const bin = resolve(dir, process.platform, 'hermesc' + extension);
 
@@ -29,7 +35,7 @@ async function compile(ctx: PluginContext, dir: string, js: string): Promise<Buf
 	if (!existsSync(temp)) await mkdir(temp);
 
 	const bytecode = join(temp, randomBytes(8).readUint32LE(0) + '.bundle');
-	const args = ['--emit-binary', '--out', bytecode, '-Wno-direct-eval', '-Wno-undefined-variable', js];
+	const args = ['--emit-binary', '--out', bytecode, '-Wno-direct-eval', '-Wno-undefined-variable', ...flags, js];
 
 	const { code, stderr } = await new Promise<{ code: number | null; stderr: string; }>((resolve, reject) => {
 		const child = spawn(bin, args, { shell: true });
@@ -56,7 +62,13 @@ async function compile(ctx: PluginContext, dir: string, js: string): Promise<Buf
 	const asset = await readFile(bytecode);
 	await rm(bytecode, { force: true });
 
-	return asset;
+	const sourceMap = bytecode + '.map';
+	if (!existsSync(sourceMap)) return { bytecode: asset, map: null };
+
+	const map = await readFile(sourceMap, 'utf-8');
+	await rm(sourceMap, { force: true });
+
+	return { bytecode: asset, map };
 }
 
 function hermesc(pluginOptions?: HermesOptions): Plugin {
@@ -95,10 +107,16 @@ function hermesc(pluginOptions?: HermesOptions): Plugin {
 
 				this.info(`${options.file} -> ${options.file.replace(file, fileName)}...`);
 
-				const asset = await compile(this, target.dir, js);
-				if (!asset) continue;
+				const compiled = await compile(this, target.dir, js, pluginOptions?.flags ?? []);
+				if (!compiled) continue;
 
-				this.emitFile({ type: 'asset', fileName, source: asset });
+				this.emitFile({ type: 'asset', fileName, source: compiled.bytecode });
+
+				if (compiled.map) {
+					// hermesc names the random temp input; the map ships next to the chunk it was compiled from.
+					const map = { ...JSON.parse(compiled.map), sources: [file] };
+					this.emitFile({ type: 'asset', fileName: fileName + '.map', source: JSON.stringify(map) });
+				}
 
 				this.info(`( ͡° ͜ʖ ͡°) Bytecode compiled to ${fileName}`);
 			}
