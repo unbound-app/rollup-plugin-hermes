@@ -113,7 +113,6 @@ function hermesc(pluginOptions?: HermesOptions): Plugin {
 				this.emitFile({ type: 'asset', fileName, source: compiled.bytecode });
 
 				if (compiled.map) {
-					// hermesc names the random temp input; the map ships next to the chunk it was compiled from.
 					const map = { ...JSON.parse(compiled.map), sources: [file] };
 					this.emitFile({ type: 'asset', fileName: fileName + '.map', source: JSON.stringify(map) });
 				}
