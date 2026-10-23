@@ -28,6 +28,8 @@ jobs:
 
       - run: bun run build
 
+      - run: npm test
+
       # Publish only when package.json's version differs from what's on npm.
       # This is the idempotency / loop guard: unrelated pushes and replayed
       # events (version already published) skip cleanly.

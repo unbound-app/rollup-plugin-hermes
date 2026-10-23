@@ -63,7 +63,10 @@ async function compile(ctx: PluginContext, dir: string, js: string, flags: strin
 	await rm(bytecode, { force: true });
 
 	const sourceMap = bytecode + '.map';
-	if (!existsSync(sourceMap)) return { bytecode: asset, map: null };
+	if (!existsSync(sourceMap)) {
+		if (flags.includes('-output-source-map')) ctx.error(`hermesc was passed -output-source-map but wrote no map at ${sourceMap}.`);
+		return { bytecode: asset, map: null };
+	}
 
 	const map = await readFile(sourceMap, 'utf-8');
 	await rm(sourceMap, { force: true });

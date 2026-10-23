@@ -18,7 +18,7 @@ while [ $# -gt 0 ]; do
 	shift
 done
 printf 'bytecode' > "$out"
-if [ $map = 1 ]; then
+if [ $map = 1 ] && [ -z "$FAKE_SKIP_MAP" ]; then
 	printf '{"version":3,"sources":["/tmp/hermesc/123.js"],"names":[],"mappings":"AAAA"}' > "$out.map"
 fi
 `;
@@ -78,6 +78,16 @@ test('emits the hermesc source map next to the bundle with the chunk as its sour
 	assert.equal(emitted['unbound.bundle'].toString(), 'bytecode');
 	assert.deepEqual(JSON.parse(emitted['unbound.bundle.map']).sources, ['unbound.js']);
 	assert.equal(JSON.parse(emitted['unbound.bundle.map']).mappings, 'AAAA');
+});
+
+test('fails when -output-source-map was passed but hermesc wrote no map', async () => {
+	process.env.FAKE_SKIP_MAP = '1';
+
+	try {
+		await assert.rejects(build(['-output-source-map']), /wrote no map/);
+	} finally {
+		delete process.env.FAKE_SKIP_MAP;
+	}
 });
 
 test('emits no source map without -output-source-map', async () => {
